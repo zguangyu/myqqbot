@@ -12,9 +12,6 @@ MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
 COMPRESS_THRESHOLD = int(os.getenv("COMPRESS_THRESHOLD", "15"))
 COMPRESS_KEEP_RECENT = int(os.getenv("COMPRESS_KEEP_RECENT", "6"))
 
-# 多模型配置
-MODEL_NAMES = [m.strip() for m in os.getenv("MODEL_NAME", "gpt-4o-mini").split(",") if m.strip()]
-
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
@@ -24,7 +21,7 @@ class ChatAgent:
     def __init__(self, api_key: str, base_url: str, model_name: str):
         self.api_key = api_key
         self.base_url = base_url
-        self.models = MODEL_NAMES
+        self.models = [m.strip() for m in model_name.split(",") if m.strip()]
         self.current_model_index = 0
         self.llm = self._create_llm(self.models[self.current_model_index])
         self.memory = MemorySaver()
