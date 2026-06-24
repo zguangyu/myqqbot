@@ -25,6 +25,40 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL")
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o-mini")
 
 
+def handle_command(content: str, agent: ChatAgent) -> str:
+    if not content.startswith("/"):
+        return None
+
+    parts = content.split(maxsplit=1)
+    cmd = parts[0].lower()
+    args = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd == "/help":
+        model_list = "\n".join([f"  - {m}" for m in agent.get_model_list()])
+        return (
+            "可用命令：\n"
+            "/help - 显示此帮助\n"
+            "/model - 列出可用模型\n"
+            "/model <模型名> - 切换模型\n"
+            f"\n当前模型：{agent.get_current_model()}\n"
+            f"可用模型：\n{model_list}"
+        )
+
+    elif cmd == "/model":
+        if not args:
+            models = agent.get_model_list()
+            current = agent.get_current_model()
+            model_list = "\n".join([f"  - {'✓ ' if m == current else ''}{m}" for m in models])
+            return f"当前模型：{current}\n可用模型：\n{model_list}"
+
+        if agent.switch_model(args):
+            return f"已切换到模型：{args}"
+        else:
+            return f"未找到模型：{args}\n可用模型：{', '.join(agent.get_model_list())}"
+
+    return None
+
+
 class MyClient(botpy.Client):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -47,6 +81,12 @@ class MyClient(botpy.Client):
             await message.reply(content="请输入消息内容")
             return
 
+        # 处理命令
+        cmd_reply = handle_command(content, self.agent)
+        if cmd_reply:
+            await message.reply(content=cmd_reply)
+            return
+
         thread_id = f"{msg_type}_{message.channel_id}"
         try:
             reply = await self.agent.chat(content, thread_id)
@@ -65,6 +105,12 @@ class MyClient(botpy.Client):
     async def on_c2c_message_create(self, message: C2CMessage):
         content = message.content.strip()
         logger.info(f"收到C2C消息 | 发送者:{message.author} | 内容:{content}")
+
+        # 处理命令
+        cmd_reply = handle_command(content, self.agent)
+        if cmd_reply:
+            await message.reply(content=cmd_reply)
+            return
         
         thread_id = f"c2c_{message.author.user_openid}"
         try:
@@ -79,6 +125,12 @@ class MyClient(botpy.Client):
         content = message.content.strip()
         content = re.sub(r"<@!?\d+>", "", content).strip()
         logger.info(f"收到群消息 | 群:{message.group_openid} | 内容:{content}")
+
+        # 处理命令
+        cmd_reply = handle_command(content, self.agent)
+        if cmd_reply:
+            await message.reply(content=cmd_reply)
+            return
         
         thread_id = f"group_{message.group_openid}"
         try:

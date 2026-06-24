@@ -12,6 +12,9 @@ MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
 COMPRESS_THRESHOLD = int(os.getenv("COMPRESS_THRESHOLD", "15"))
 COMPRESS_KEEP_RECENT = int(os.getenv("COMPRESS_KEEP_RECENT", "6"))
 
+# 多模型配置
+MODEL_NAMES = [m.strip() for m in os.getenv("MODEL_NAME", "gpt-4o-mini").split(",") if m.strip()]
+
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
@@ -19,14 +22,35 @@ class AgentState(TypedDict):
 
 class ChatAgent:
     def __init__(self, api_key: str, base_url: str, model_name: str):
-        self.llm = ChatOpenAI(
-            api_key=api_key,
-            base_url=base_url,
+        self.api_key = api_key
+        self.base_url = base_url
+        self.models = MODEL_NAMES
+        self.current_model_index = 0
+        self.llm = self._create_llm(self.models[self.current_model_index])
+        self.memory = MemorySaver()
+        self.graph = self._build_graph()
+
+    def _create_llm(self, model_name: str) -> ChatOpenAI:
+        return ChatOpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
             model=model_name,
             temperature=0.7,
         )
-        self.memory = MemorySaver()
-        self.graph = self._build_graph()
+
+    def get_current_model(self) -> str:
+        return self.models[self.current_model_index]
+
+    def get_model_list(self) -> list[str]:
+        return self.models
+
+    def switch_model(self, model_name: str) -> bool:
+        for i, m in enumerate(self.models):
+            if m.lower() == model_name.lower():
+                self.current_model_index = i
+                self.llm = self._create_llm(m)
+                return True
+        return False
 
     async def _compress_messages(self, messages: list[BaseMessage]) -> list[BaseMessage]:
         if len(messages) <= COMPRESS_THRESHOLD:
