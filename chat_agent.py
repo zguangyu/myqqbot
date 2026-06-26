@@ -12,6 +12,11 @@ MAX_HISTORY = int(os.getenv("MAX_HISTORY", "20"))
 COMPRESS_THRESHOLD = int(os.getenv("COMPRESS_THRESHOLD", "15"))
 COMPRESS_KEEP_RECENT = int(os.getenv("COMPRESS_KEEP_RECENT", "6"))
 
+SYSTEM_PROMPT = """你是一个QQ聊天机器人。请注意：
+1. 回复要简短，不要长篇大论
+2. 不要使用Markdown格式
+3. 使用纯文本回复，适合在QQ聊天中显示"""
+
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
@@ -97,7 +102,19 @@ class ChatAgent:
 
     async def chat(self, user_message: str, thread_id: str) -> str:
         config = {"configurable": {"thread_id": thread_id}}
-        input_messages = [HumanMessage(content=user_message)]
+        
+        state = await self.graph.aget_state(config)
+        existing_messages = state.values.get("messages", []) if state.values else []
+        has_system_prompt = any(
+            isinstance(m, SystemMessage) and m.content == SYSTEM_PROMPT
+            for m in existing_messages
+        )
+        
+        input_messages = []
+        if not has_system_prompt:
+            input_messages.append(SystemMessage(content=SYSTEM_PROMPT))
+        input_messages.append(HumanMessage(content=user_message))
+        
         result = await self.graph.ainvoke(
             {"messages": input_messages}, 
             config=config,
